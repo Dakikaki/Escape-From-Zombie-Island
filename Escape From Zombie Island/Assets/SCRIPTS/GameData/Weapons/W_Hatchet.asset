@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: W_Hatchet
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponData
+  weaponName: Hatchet
+  attackPattern: {fileID: 11400000, guid: 6c871a31eebacd84785c77413f282b7f, type: 2}
+  range: 0
+  apCost: 2
+  damage: 2
+  attackPose: 3
+  cursor: {fileID: 0}
+  drawSound: {fileID: 8300000, guid: ece9fce61fc18824fb1395d45ff780a9, type: 3}
+  sheatheSound: {fileID: 8300000, guid: 0490eb69a0ba0bd48bfa06e7548ba381, type: 3}
+  attackSound: {fileID: 8300000, guid: f07a726174af7814e86dd8c40bd0fd25, type: 3}
