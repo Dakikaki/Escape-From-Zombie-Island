@@ -1,121 +1,103 @@
 using UnityEngine;
 
-// This attribute allows the script to run in the editor, enabling the preview.
-[ExecuteInEditMode]
+<<<<<<< HEAD
+<<<<<<< HEAD
+/// <summary>
+/// Manages the player's visual representation, switching between different pose prefabs.
+/// </summary>
+=======
+>>>>>>> parent of fb0af9e (Fixed player idle pose in editor)
+=======
+>>>>>>> parent of fb0af9e (Fixed player idle pose in editor)
 public class PlayerAnimationController : MonoBehaviour
 {
-    // Updated enum for more generic attack types
-    public enum Pose { Idle, Walk, MeleeAttack, RangedAttack }
-
     [Header("Pose Prefabs")]
-    public GameObject idlePosePrefab;
-    public GameObject walkPosePrefab;
-    public GameObject meleeAttackPosePrefab;
-    public GameObject rangedAttackPosePrefab;
+    public GameObject idlePose;
+    public GameObject walkPose;
+    [Space(10)] // Adds a little space in the inspector for organization
+    public GameObject hatchetPose;
+    public GameObject knifePose;
+    public GameObject pistolPose;
+    [Space(10)]
+    public GameObject placeBearTrapPose;
+    public GameObject placeNoiseMakerPose;
 
-    private GameObject currentPoseInstance; // Used for the pose during Play mode
-    private GameObject editorPoseInstance;  // Used only for the editor preview
-    private GameObject lastAssignedIdlePrefab; // Tracks inspector changes to update the preview
+<<<<<<< HEAD
+<<<<<<< HEAD
+
+    private GameObject activePose;
 
     void Start()
     {
-        // This logic only runs in Play mode.
-        if (Application.isPlaying)
-        {
-            // Clear the editor preview instance before starting the game.
-            if (editorPoseInstance != null)
-            {
-                Destroy(editorPoseInstance);
-            }
-
-            if (idlePosePrefab == null)
-            {
-                Debug.LogError("Idle Pose Prefab is not assigned!", this.gameObject);
-                return;
-            }
-            SwitchPose(Pose.Idle);
-        }
-    }
-
-    void Update()
-    {
-        // This block runs only in the editor, not in play mode, to manage the preview safely.
-        if (!Application.isPlaying && Application.isEditor)
-        {
-            UpdateEditorPose();
-        }
-    }
-
-    // Clean up the preview when the component is disabled or the object is destroyed in the editor.
-    void OnDisable()
-    {
-        if (!Application.isPlaying && Application.isEditor && editorPoseInstance != null)
-        {
-            DestroyImmediate(editorPoseInstance);
-        }
+        // Start in the idle pose by default
+        SwitchPose(idlePose);
     }
 
     /// <summary>
-    /// Checks if the assigned idle prefab has changed and updates the editor preview accordingly.
-    /// This is the safe alternative to using OnValidate for creating/destroying objects.
+    /// Deactivates the current pose and activates the new one.
     /// </summary>
-    private void UpdateEditorPose()
+    /// <param name="newPosePrefab">The prefab of the pose to switch to.</param>
+    public void SwitchPose(GameObject newPosePrefab)
     {
-        // If the prefab in the inspector has changed since our last update...
-        if (lastAssignedIdlePrefab != idlePosePrefab)
+        if (newPosePrefab == null)
         {
-            // ...clear the existing preview...
-            if (editorPoseInstance != null)
-            {
-                DestroyImmediate(editorPoseInstance);
-            }
+            Debug.LogWarning("Tried to switch to a null pose prefab.");
+            return;
+=======
+    private GameObject currentPoseInstance;
 
-            // ...and if a new prefab is assigned, create a new preview.
-            if (idlePosePrefab != null)
-            {
-                editorPoseInstance = Instantiate(idlePosePrefab, transform);
-                // This is a CRUCIAL step. It prevents the preview object from being saved with the scene.
-                editorPoseInstance.hideFlags = HideFlags.HideAndDontSave;
-            }
+    void Start()
+    {
+=======
+    private GameObject currentPoseInstance;
 
-            // Finally, update our tracking variable to match the inspector.
-            lastAssignedIdlePrefab = idlePosePrefab;
+    void Start()
+    {
+>>>>>>> parent of fb0af9e (Fixed player idle pose in editor)
+        if (idlePosePrefab == null)
+        {
+            Debug.LogError("Idle Pose Prefab is not assigned!", this.gameObject);
+            return;
         }
+        SwitchPose(Pose.Idle);
     }
 
-    /// <summary>
-    /// Switches the character's visual representation. This is the primary runtime logic.
-    /// </summary>
-    /// <param name="newPose">The new pose to display.</param>
     public void SwitchPose(Pose newPose)
     {
-        if (!Application.isPlaying) return; // This should only run in play mode.
-
         if (currentPoseInstance != null)
         {
             Destroy(currentPoseInstance);
+>>>>>>> parent of fb0af9e (Fixed player idle pose in editor)
         }
 
-        GameObject prefabToInstantiate = GetPrefabForPose(newPose);
-
-        if (prefabToInstantiate != null)
+        // Deactivate the old pose if it exists
+        if (activePose != null)
         {
-            currentPoseInstance = Instantiate(prefabToInstantiate, transform);
+            activePose.SetActive(false);
         }
-    }
 
-    /// <summary>
-    /// Returns the prefab associated with a given pose.
-    /// </summary>
+<<<<<<< HEAD
+<<<<<<< HEAD
+        // Find or instantiate the new pose
+        Transform poseTransform = transform.Find(newPosePrefab.name);
+        if (poseTransform == null)
+=======
+=======
+>>>>>>> parent of fb0af9e (Fixed player idle pose in editor)
     private GameObject GetPrefabForPose(Pose pose)
     {
         switch (pose)
+>>>>>>> parent of fb0af9e (Fixed player idle pose in editor)
         {
-            case Pose.Idle: return idlePosePrefab;
-            case Pose.Walk: return walkPosePrefab;
-            case Pose.MeleeAttack: return meleeAttackPosePrefab;
-            case Pose.RangedAttack: return rangedAttackPosePrefab;
-            default: return null;
+            // Instantiate the new pose as a child of this controller
+            activePose = Instantiate(newPosePrefab, transform);
+            activePose.name = newPosePrefab.name; // Clean up the "(Clone)" from the name
+        }
+        else
+        {
+            // If the pose already exists (was instantiated before), just reactivate it
+            activePose = poseTransform.gameObject;
+            activePose.SetActive(true);
         }
     }
 }

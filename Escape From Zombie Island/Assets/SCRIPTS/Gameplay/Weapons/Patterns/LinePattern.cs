@@ -1,43 +1,34 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
-[CreateAssetMenu(fileName = "New Line Pattern", menuName = "Weapons/Patterns/Line")]
+[CreateAssetMenu(fileName = "New Line Pattern", menuName = "Game Data/Attack Patterns/Line")]
 public class LinePattern : AttackPattern
 {
-    public override List<Tile> GetValidTargets(GridManager gridManager, Tile startTile, int range)
+    public override List<Tile> GetTilesInRange(Tile startingTile, int range)
     {
         List<Tile> validTiles = new List<Tile>();
-        if (gridManager == null || startTile == null) return validTiles;
+        GridManager gridManager = FindFirstObjectByType<GridManager>();
 
-        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
-
-        foreach (var dir in directions)
+        if (startingTile == null || gridManager == null)
         {
-            for (int i = 1; i <= range; i++)
-            {
-                Tile tile = gridManager.GetTile(startTile.x + dir.x * i, startTile.z + dir.y * i);
-
-                // If we hit an empty space, the line of sight is blocked.
-                if (tile == null) break;
-
-                validTiles.Add(tile);
-
-                // Check if any unit is on this tile
-                var units = FindObjectsByType<UnitController>(FindObjectsSortMode.None);
-                bool isBlocked = false;
-                foreach (var unit in units)
-                {
-                    if (unit.currentTile == tile)
-                    {
-                        isBlocked = true;
-                        break;
-                    }
-                }
-
-                // If the tile is blocked, stop casting further in this direction.
-                if (isBlocked) break;
-            }
+            return validTiles;
         }
+
+        // Horizontal and Vertical Lines
+        for (int i = 1; i <= range; i++)
+        {
+            // Right
+            validTiles.Add(gridManager.GetTileAt(startingTile.x + i, startingTile.z));
+            // Left
+            validTiles.Add(gridManager.GetTileAt(startingTile.x - i, startingTile.z));
+            // Up
+            validTiles.Add(gridManager.GetTileAt(startingTile.x, startingTile.z + i));
+            // Down
+            validTiles.Add(gridManager.GetTileAt(startingTile.x, startingTile.z - i));
+        }
+
+        // Remove any nulls if tiles were out of bounds
+        validTiles.RemoveAll(item => item == null);
         return validTiles;
     }
 }

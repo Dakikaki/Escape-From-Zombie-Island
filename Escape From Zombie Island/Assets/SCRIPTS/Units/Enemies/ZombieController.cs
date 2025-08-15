@@ -4,7 +4,11 @@ using System.Collections.Generic;
 
 public class ZombieController : UnitController
 {
+    [Header("Zombie Settings")]
+    public float moveSpeed = 2f;
     private PlayerController player;
+    private bool isMoving = false;
+    private List<Tile> currentPath;
 
     protected override void Start()
     {
@@ -12,25 +16,45 @@ public class ZombieController : UnitController
         player = FindFirstObjectByType<PlayerController>();
     }
 
-    public IEnumerator TakeTurn()
+    void Update()
     {
-        // This logic is now simpler as it just uses the base class health
-        if (isMoving) yield break;
+        // Zombie logic can go here if needed every frame
+    }
 
-        List<Tile> path = gridManager.FindPath(currentTile, player.currentTile);
+    public void TakeTurn()
+    {
+        if (isMoving || player == null) return;
 
-        if (path != null && path.Count > 1)
+        // Find the path to the player
+        currentPath = gridManager.FindPath(currentTile, player.currentTile);
+
+        // If a path exists, start moving
+        if (currentPath != null && currentPath.Count > 0)
         {
-            if (path.Count == 2)
-            {
-                Debug.Log("Zombie attacks Player!");
-                player.TakeDamage(1); // Assuming 1 damage for now
-            }
-            else
-            {
-                List<Tile> firstStep = new List<Tile> { path[1] };
-                yield return StartCoroutine(MoveAlongPath(firstStep));
-            }
+            StartCoroutine(MoveAlongPath(currentPath));
         }
+    }
+
+    private IEnumerator MoveAlongPath(List<Tile> path)
+    {
+        isMoving = true;
+
+        foreach (Tile tile in path)
+        {
+            Vector3 targetPosition = tile.transform.position;
+            // Keep the zombie's original y position
+            targetPosition.y = transform.position.y;
+
+            while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
+            {
+                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+                yield return null;
+            }
+
+            transform.position = targetPosition; // Snap to final position
+            currentTile = tile;
+        }
+
+        isMoving = false;
     }
 }

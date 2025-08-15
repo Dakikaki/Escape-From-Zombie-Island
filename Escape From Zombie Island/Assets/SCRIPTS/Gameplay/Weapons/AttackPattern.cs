@@ -1,18 +1,16 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
-/// An abstract Scriptable Object that serves as a template for all weapon targeting behaviors.
+/// A ScriptableObject that defines a pattern of tiles for an attack or ability.
 /// </summary>
 public abstract class AttackPattern : ScriptableObject
 {
     /// <summary>
-    /// The core method for every pattern. Given a starting point and a grid, 
-    /// it returns all valid target tiles.
+    /// Gets a list of tiles based on this pattern.
     /// </summary>
-    /// <param name="gridManager">A reference to the GridManager to query for tiles.</param>
-    /// <param name="startTile">The tile the unit is currently on.</param>
-    /// <param name="range">The range of the attack, used differently by each pattern.</param>
-    /// <returns>A list of all tiles that are valid targets.</returns>
-    public abstract List<Tile> GetValidTargets(GridManager gridManager, Tile startTile, int range);
+    /// <param name="startingTile">The tile the unit is on.</param>
+    /// <param name="range">The range of the attack.</param>
+    /// <returns>A list of valid target tiles.</returns>
+    public abstract List<Tile> GetTilesInRange(Tile startingTile, int range);
 }

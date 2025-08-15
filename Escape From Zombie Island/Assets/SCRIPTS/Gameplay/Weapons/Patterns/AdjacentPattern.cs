@@ -1,23 +1,27 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
-[CreateAssetMenu(fileName = "New Adjacent Pattern", menuName = "Weapons/Patterns/Adjacent")]
+[CreateAssetMenu(fileName = "New Adjacent Pattern", menuName = "Game Data/Attack Patterns/Adjacent")]
 public class AdjacentPattern : AttackPattern
 {
-    public override List<Tile> GetValidTargets(GridManager gridManager, Tile startTile, int range)
+    public override List<Tile> GetTilesInRange(Tile startingTile, int range)
     {
         List<Tile> validTiles = new List<Tile>();
-        if (gridManager == null || startTile == null) return validTiles;
+        GridManager gridManager = FindFirstObjectByType<GridManager>();
 
-        // Loop through a square grid centered on the start tile
-        for (int x = -range; x <= range; x++)
+        if (startingTile == null || gridManager == null)
         {
-            for (int z = -range; z <= range; z++)
-            {
-                // Skip the center tile itself
-                if (x == 0 && z == 0) continue;
+            return validTiles;
+        }
 
-                Tile tile = gridManager.GetTile(startTile.x + x, startTile.z + z);
+        // Check all 8 directions around the starting tile
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int z = -1; z <= 1; z++)
+            {
+                if (x == 0 && z == 0) continue; // Skip the center tile
+
+                Tile tile = gridManager.GetTileAt(startingTile.x + x, startingTile.z + z);
                 if (tile != null)
                 {
                     validTiles.Add(tile);

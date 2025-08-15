@@ -1,71 +1,84 @@
-using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.InputSystem;
-using System;
+using UnityEngine;
 
-/// <summary>
-/// Manages the game turns using a flexible event-based system.
-/// </summary>
 public class TurnManager : MonoBehaviour
 {
-    public enum TurnState { PlayerTurn, ZombieTurn }
-    public TurnState CurrentState { get; private set; }
+    public PlayerController player;
+    public List<ZombieController> zombies;
 
-    private Queue<ZombieController> zombieTurnQueue = new Queue<ZombieController>();
-    private PlayerController player;
+    private enum TurnState
+    {
+        PlayerTurn,
+        EnemyTurn,
+        Processing
+    }
 
-    // Event that units can subscribe to, to know when their turn is over.
-    public static event Action OnPlayerTurnEnd;
+    private TurnState currentState;
 
     void Start()
     {
-        player = FindFirstObjectByType<PlayerController>();
-        var zombies = FindObjectsByType<ZombieController>(FindObjectsSortMode.None);
-        foreach (var zombie in zombies)
+        // Find player if not assigned
+        if (player == null)
         {
-            zombieTurnQueue.Enqueue(zombie);
+            player = FindFirstObjectByType<PlayerController>();
         }
+
+        // Find all active zombies in the scene using the new, recommended method
+        zombies.AddRange(FindObjectsByType<ZombieController>(FindObjectsSortMode.None));
+
+        // Start the game with the player's turn
         StartPlayerTurn();
     }
 
     void Update()
     {
-        if (CurrentState == TurnState.PlayerTurn && Keyboard.current.spaceKey.wasPressedThisFrame)
+        // For now, we'll just use a key press to end the player's turn.
+        // This will be replaced by UI buttons later.
+        if (currentState == TurnState.PlayerTurn && Input.GetKeyDown(KeyCode.Space))
         {
             EndPlayerTurn();
         }
     }
 
-    private void StartPlayerTurn()
+    void StartPlayerTurn()
     {
-        CurrentState = TurnState.PlayerTurn;
-        player.ResetAP();
-        Debug.Log("--- PLAYER TURN ---");
-    }
-
-    private void EndPlayerTurn()
-    {
-        OnPlayerTurnEnd?.Invoke(); // Announce that the player's turn is over.
-        StartZombieTurnPhase();
-    }
-
-    private void StartZombieTurnPhase()
-    {
-        CurrentState = TurnState.ZombieTurn;
-        Debug.Log("--- ZOMBIE TURN ---");
-        StartCoroutine(ProcessZombieQueue());
-    }
-
-    private IEnumerator ProcessZombieQueue()
-    {
-        // Process one zombie at a time from the queue.
-        foreach (var zombie in zombieTurnQueue)
+        Debug.Log("--- PLAYER'S TURN ---");
+        currentState = TurnState.PlayerTurn;
+        if (player != null)
         {
-            yield return StartCoroutine(zombie.TakeTurn());
+            player.ResetAP();
+        }
+    }
+
+    void EndPlayerTurn()
+    {
+        currentState = TurnState.Processing;
+        Debug.Log("Player ends their turn.");
+        StartCoroutine(EnemyTurnRoutine());
+    }
+
+    IEnumerator EnemyTurnRoutine()
+    {
+        Debug.Log("--- ZOMBIES' TURN ---");
+        currentState = TurnState.EnemyTurn;
+
+        // Make each zombie take their turn, one by one
+        foreach (var zombie in zombies)
+        {
+            if (zombie != null)
+            {
+                // Call the method first, then log a message.
+                zombie.TakeTurn();
+                Debug.Log($"{zombie.name} takes its turn.");
+
+                // Wait for a short moment before the next zombie moves
+                yield return new WaitForSeconds(1.0f);
+            }
         }
 
-        // All zombies have acted, start the player's turn again.
+        // After all enemies have moved, start the player's turn again.
+        yield return new WaitForSeconds(1.0f); // A brief pause before the next turn starts
         StartPlayerTurn();
     }
 }

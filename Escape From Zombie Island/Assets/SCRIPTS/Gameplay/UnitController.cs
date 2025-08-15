@@ -1,45 +1,71 @@
 using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
 
-public abstract class UnitController : MonoBehaviour
+/// <summary>
+/// The base class for any unit in the game (Player, Zombies, etc.).
+/// </summary>
+public class UnitController : MonoBehaviour
 {
     [Header("Unit Stats")]
-    public int maxHealth = 1;
-    [HideInInspector] public int currentHealth;
+    public int maxHP = 3;
+    public int currentHP;
+    public int maxAP = 2;
+    public int currentAP;
 
-    [Header("Unit Movement")]
-    public float moveSpeed = 4.0f;
+    [Header("Unit State")]
+    public Tile currentTile;
 
-    public Tile currentTile { get; protected set; }
-    protected bool isMoving = false;
-    protected GridManager gridManager;
+    [Header("Dependencies")]
+    public GridManager gridManager;
 
-    protected virtual void Awake()
-    {
-        currentHealth = maxHealth;
-    }
+    // Event for UI to subscribe to. Sends (currentAP, maxAP).
+    public event System.Action<int, int> OnAPChanged;
 
     protected virtual void Start()
     {
-        gridManager = FindFirstObjectByType<GridManager>();
-        StartCoroutine(InitializeUnitPosition());
-    }
+        currentHP = maxHP;
+        currentAP = maxAP;
 
-    private IEnumerator InitializeUnitPosition()
-    {
-        yield return new WaitForEndOfFrame();
-        UpdateCurrentTile();
-        if (currentTile == null)
+        // Find GridManager if not assigned
+        if (gridManager == null)
         {
-            Debug.LogError($"Unit '{gameObject.name}' could not find a tile at its starting position.", gameObject);
+            gridManager = FindFirstObjectByType<GridManager>();
+        }
+
+        // Find the tile we are starting on
+        if (gridManager != null)
+        {
+            currentTile = gridManager.GetTileAtWorldPosition(transform.position);
         }
     }
 
-    public void TakeDamage(int damageAmount)
+    /// <summary>
+    /// Reduces the unit's AP and notifies any listeners (like the UI).
+    /// </summary>
+    public void SpendAP(int amount)
     {
-        currentHealth -= damageAmount;
-        if (currentHealth <= 0)
+        currentAP -= amount;
+        if (currentAP < 0)
+        {
+            currentAP = 0;
+        }
+        // Fire the event to update the UI
+        OnAPChanged?.Invoke(currentAP, maxAP);
+    }
+
+    /// <summary>
+    /// Resets the unit's AP to its maximum value.
+    /// </summary>
+    public void ResetAP()
+    {
+        currentAP = maxAP;
+        // Fire the event to update the UI
+        OnAPChanged?.Invoke(currentAP, maxAP);
+    }
+
+    public void TakeDamage(int damage)
+    {
+        currentHP -= damage;
+        if (currentHP <= 0)
         {
             Die();
         }
@@ -47,39 +73,7 @@ public abstract class UnitController : MonoBehaviour
 
     protected virtual void Die()
     {
+        Debug.Log(gameObject.name + " has died.");
         Destroy(gameObject);
-    }
-
-    protected IEnumerator MoveAlongPath(List<Tile> path)
-    {
-        isMoving = true;
-        foreach (Tile targetTile in path)
-        {
-            Vector3 targetPosition = targetTile.transform.position;
-            targetPosition.y = transform.position.y;
-            while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
-            {
-                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-                yield return null;
-            }
-            transform.position = targetPosition;
-            currentTile = targetTile;
-        }
-        isMoving = false;
-    }
-
-    public void UpdateCurrentTile()
-    {
-        Collider[] colliders = Physics.OverlapSphere(transform.position, 0.2f);
-        foreach (var collider in colliders)
-        {
-            Tile tile = collider.GetComponent<Tile>();
-            if (tile != null)
-            {
-                currentTile = tile;
-                return;
-            }
-        }
-        currentTile = null;
     }
 }
