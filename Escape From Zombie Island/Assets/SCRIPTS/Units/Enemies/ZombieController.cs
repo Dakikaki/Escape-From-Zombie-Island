@@ -5,15 +5,16 @@ using System.Collections.Generic;
 public class ZombieController : UnitController
 {
     [Header("Zombie Settings")]
-    public float moveSpeed = 2f;
+    public int movementRange = 2; // The maximum number of tiles the zombie can move in one turn.
+
     private PlayerController player;
-    private bool isMoving = false;
     private List<Tile> currentPath;
 
     protected override void Start()
     {
         base.Start();
         player = FindFirstObjectByType<PlayerController>();
+        this.moveSpeed = 2f; // Set the inherited moveSpeed
     }
 
     void Update()
@@ -21,40 +22,36 @@ public class ZombieController : UnitController
         // Zombie logic can go here if needed every frame
     }
 
-    public void TakeTurn()
+    public IEnumerator TakeTurn()
     {
-        if (isMoving || player == null) return;
+        if (isMoving || player == null || player.currentTile == null) yield break;
 
-        // Find the path to the player
+        // Find the full path to the player
         currentPath = gridManager.FindPath(currentTile, player.currentTile);
 
-        // If a path exists, start moving
-        if (currentPath != null && currentPath.Count > 0)
+        // If a path exists, determine how many steps to take
+        if (currentPath != null && currentPath.Count > 1) // Path includes the start tile, so > 1 means there's somewhere to go
         {
-            StartCoroutine(MoveAlongPath(currentPath));
-        }
-    }
+            // Create a list for the path this zombie will actually walk this turn
+            List<Tile> pathThisTurn = new List<Tile>();
 
-    private IEnumerator MoveAlongPath(List<Tile> path)
-    {
-        isMoving = true;
+            // The path includes the zombie's starting tile, so we look at the next tiles
+            // We can move up to 'movementRange' steps.
+            int stepsToTake = Mathf.Min(movementRange, currentPath.Count - 1);
 
-        foreach (Tile tile in path)
-        {
-            Vector3 targetPosition = tile.transform.position;
-            // Keep the zombie's original y position
-            targetPosition.y = transform.position.y;
-
-            while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
+            for (int i = 1; i <= stepsToTake; i++)
             {
-                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-                yield return null;
+                pathThisTurn.Add(currentPath[i]);
             }
 
-            transform.position = targetPosition; // Snap to final position
-            currentTile = tile;
+            // If there's a valid path for this turn, move along it
+            if (pathThisTurn.Count > 0)
+            {
+                yield return StartCoroutine(MoveAlongPath(pathThisTurn));
+            }
         }
-
-        isMoving = false;
     }
+
+    // This method is inherited from UnitController and moves the character along the provided path list
+    // No changes are needed here, as we are now feeding it the correctly shortened path.
 }

@@ -1,71 +1,75 @@
 using UnityEngine;
+using System;
+using System.Collections;
+using System.Collections.Generic;
 
-/// <summary>
-/// The base class for any unit in the game (Player, Zombies, etc.).
-/// </summary>
-public class UnitController : MonoBehaviour
+public abstract class UnitController : MonoBehaviour
 {
     [Header("Unit Stats")]
-    public int maxHP = 3;
-    public int currentHP;
-    public int maxAP = 2;
-    public int currentAP;
+    public int maxHealth = 1;
+    [HideInInspector] public int currentHealth;
 
-    [Header("Unit State")]
-    public Tile currentTile;
+    [Header("Action Points")]
+    public int maxAP = 5;
+    [HideInInspector] public int currentAP;
 
-    [Header("Dependencies")]
-    public GridManager gridManager;
+    [Header("Unit Movement")]
+    public float moveSpeed = 4.0f;
 
-    // Event for UI to subscribe to. Sends (currentAP, maxAP).
-    public event System.Action<int, int> OnAPChanged;
+    public Tile currentTile { get; protected set; }
+    protected bool isMoving = false;
+    protected GridManager gridManager;
+
+    public static event Action<int, int> OnAPChanged;
+
+    protected virtual void Awake()
+    {
+        currentHealth = maxHealth;
+    }
 
     protected virtual void Start()
     {
-        currentHP = maxHP;
-        currentAP = maxAP;
+        gridManager = FindFirstObjectByType<GridManager>();
+        StartCoroutine(InitializeUnitPosition());
+    }
 
-        // Find GridManager if not assigned
-        if (gridManager == null)
+    private IEnumerator InitializeUnitPosition()
+    {
+        yield return new WaitForEndOfFrame();
+        UpdateCurrentTile();
+        if (currentTile == null)
         {
-            gridManager = FindFirstObjectByType<GridManager>();
-        }
-
-        // Find the tile we are starting on
-        if (gridManager != null)
-        {
-            currentTile = gridManager.GetTileAtWorldPosition(transform.position);
+            Debug.LogError($"Unit '{gameObject.name}' could not find a tile at its starting position.", gameObject);
         }
     }
 
-    /// <summary>
-    /// Reduces the unit's AP and notifies any listeners (like the UI).
-    /// </summary>
-    public void SpendAP(int amount)
+    public virtual void ResetAP()
     {
-        currentAP -= amount;
-        if (currentAP < 0)
+        currentAP = maxAP;
+        InvokeOnAPChanged();
+    }
+
+    public virtual bool SpendAP(int amount)
+    {
+        if (currentAP >= amount)
         {
-            currentAP = 0;
+            currentAP -= amount;
+            InvokeOnAPChanged();
+            return true;
         }
-        // Fire the event to update the UI
+        return false;
+    }
+
+    // Protected method to allow derived classes to invoke the static event
+    protected void InvokeOnAPChanged()
+    {
         OnAPChanged?.Invoke(currentAP, maxAP);
     }
 
-    /// <summary>
-    /// Resets the unit's AP to its maximum value.
-    /// </summary>
-    public void ResetAP()
+    public void TakeDamage(int damageAmount)
     {
-        currentAP = maxAP;
-        // Fire the event to update the UI
-        OnAPChanged?.Invoke(currentAP, maxAP);
-    }
-
-    public void TakeDamage(int damage)
-    {
-        currentHP -= damage;
-        if (currentHP <= 0)
+        currentHealth -= damageAmount;
+        if (currentHealth <= 0)
         {
             Die();
         }
@@ -73,7 +77,39 @@ public class UnitController : MonoBehaviour
 
     protected virtual void Die()
     {
-        Debug.Log(gameObject.name + " has died.");
         Destroy(gameObject);
+    }
+
+    protected virtual IEnumerator MoveAlongPath(List<Tile> path)
+    {
+        isMoving = true;
+        foreach (Tile targetTile in path)
+        {
+            Vector3 targetPosition = targetTile.transform.position;
+            targetPosition.y = transform.position.y;
+            while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
+            {
+                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+                yield return null;
+            }
+            transform.position = targetPosition;
+            currentTile = targetTile;
+        }
+        isMoving = false;
+    }
+
+    public void UpdateCurrentTile()
+    {
+        Collider[] colliders = Physics.OverlapSphere(transform.position, 0.2f);
+        foreach (var collider in colliders)
+        {
+            Tile tile = collider.GetComponent<Tile>();
+            if (tile != null)
+            {
+                currentTile = tile;
+                return;
+            }
+        }
+        currentTile = null;
     }
 }

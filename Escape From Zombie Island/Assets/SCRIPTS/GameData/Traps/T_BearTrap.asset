@@ -12,6 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 91c89b6b3126ca14498a39a37d7a4be4, type: 3}
   m_Name: T_BearTrap
   m_EditorClassIdentifier: 
-  trapName: 
-  trapPrefab: {fileID: 0}
+  trapName: Bear Trap
+  description: 
+  trapPrefab: {fileID: 2672008511305713201, guid: 2b5efdc924afc8c4083960dab59f4d32, type: 3}
+  range: 1
   apCost: 2
+  damage: 1
+  uses: 1
+  icon: {fileID: 0}
+  cursor: {fileID: 0}
+  placementSound: {fileID: 0}
+  triggerSound: {fileID: 0}
+  triggerEffect: {fileID: 0}

@@ -1,132 +1,143 @@
-using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
+using System.Collections.Generic;
+using UnityEngine.InputSystem;
 
 public class GridManager : MonoBehaviour
 {
     [Header("Grid Settings")]
-    public int width = 10;
-    public int height = 10;
-    public float tileSize = 1.0f;
-    public GameObject tilePrefab;
+    public float tileSpacing = 1.0f;
 
-    private Dictionary<Vector2, Tile> grid;
+    private Tile[,] grid;
+    private Camera mainCamera;
+    private HashSet<Tile> tilesWithTraps = new HashSet<Tile>();
+
+    public int GridWidth { get; private set; }
+    public int GridHeight { get; private set; }
+    public Vector2Int GridOffset { get; private set; }
 
     void Awake()
     {
-        CreateGrid();
+        mainCamera = Camera.main;
+        DiscoverAndRegisterGrid();
     }
 
-    private void CreateGrid()
+    private void DiscoverAndRegisterGrid()
     {
-        grid = new Dictionary<Vector2, Tile>();
-        if (tilePrefab == null)
+        if (transform.childCount == 0) return;
+        Vector2Int minBounds = new Vector2Int(int.MaxValue, int.MaxValue);
+        Vector2Int maxBounds = new Vector2Int(int.MinValue, int.MinValue);
+        foreach (Transform child in transform)
         {
-            Debug.LogError("Tile Prefab is not assigned in GridManager!");
-            return;
+            int x = Mathf.RoundToInt(child.position.x / tileSpacing);
+            int z = Mathf.RoundToInt(child.position.z / tileSpacing);
+            minBounds.x = Mathf.Min(minBounds.x, x);
+            minBounds.y = Mathf.Min(minBounds.y, z);
+            maxBounds.x = Mathf.Max(maxBounds.x, x);
+            maxBounds.y = Mathf.Max(maxBounds.y, z);
         }
-
-        for (int x = 0; x < width; x++)
+        GridOffset = minBounds;
+        GridWidth = maxBounds.x - minBounds.x + 1;
+        GridHeight = maxBounds.y - minBounds.y + 1;
+        grid = new Tile[GridWidth, GridHeight];
+        foreach (Transform child in transform)
         {
-            for (int z = 0; z < height; z++)
+            Tile tile = child.GetComponent<Tile>();
+            if (tile != null)
             {
-                Vector3 position = new Vector3(x * tileSize, 0, z * tileSize);
-                GameObject tileObject = Instantiate(tilePrefab, position, Quaternion.identity, transform);
-                tileObject.name = $"Tile_{x}_{z}";
-                Tile tile = tileObject.GetComponent<Tile>();
-                tile.x = x;
-                tile.z = z;
-                grid[new Vector2(x, z)] = tile;
+                int worldX = Mathf.RoundToInt(child.position.x / tileSpacing);
+                int worldZ = Mathf.RoundToInt(child.position.z / tileSpacing);
+                int arrayX = worldX - GridOffset.x;
+                int arrayZ = worldZ - GridOffset.y;
+                tile.x = worldX;
+                tile.z = worldZ;
+                grid[arrayX, arrayZ] = tile;
             }
         }
     }
 
-    public Tile GetTileAt(int x, int z)
+    public Tile GetTileFromMousePosition()
     {
-        grid.TryGetValue(new Vector2(x, z), out Tile tile);
-        return tile;
+        Ray ray = mainCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        if (Physics.Raycast(ray, out RaycastHit hit))
+        {
+            return hit.collider.GetComponent<Tile>();
+        }
+        return null;
     }
 
     public Tile GetTileAtWorldPosition(Vector3 worldPosition)
     {
-        int x = Mathf.RoundToInt(worldPosition.x / tileSize);
-        int z = Mathf.RoundToInt(worldPosition.z / tileSize);
-        return GetTileAt(x, z);
+        Collider[] colliders = Physics.OverlapSphere(worldPosition, 0.2f);
+        foreach (var collider in colliders)
+        {
+            Tile tile = collider.GetComponent<Tile>();
+            if (tile != null)
+            {
+                return tile;
+            }
+        }
+        return null;
     }
 
-    public void HighlightTiles(List<Tile> tilesToHighlight)
+    public Tile GetTile(int x, int z)
     {
-        foreach (Tile tile in grid.Values)
+        int arrayX = x - GridOffset.x;
+        int arrayZ = z - GridOffset.y;
+        if (arrayX >= 0 && arrayX < GridWidth && arrayZ >= 0 && arrayZ < GridHeight)
         {
-            tile.SetHighlight(false);
+            return grid[arrayX, arrayZ];
         }
-
-        foreach (Tile tile in tilesToHighlight)
-        {
-            tile.SetHighlight(true);
-        }
+        return null;
     }
 
-    public void AddTrapToTile(Tile tile) { }
-    public void RemoveTrapFromTile(Tile tile) { }
-
-    #region A* Pathfinding
+    public Tile GetTileAt(int x, int z)
+    {
+        return GetTile(x, z);
+    }
 
     public List<Tile> FindPath(Tile startTile, Tile endTile)
     {
+        if (startTile == null || endTile == null) return null;
         List<Tile> openList = new List<Tile> { startTile };
-        HashSet<Tile> closedList = new HashSet<Tile>();
-
-        foreach (var tile in grid.Values)
+        HashSet<Tile> closedSet = new HashSet<Tile>();
+        foreach (Tile tile in grid)
         {
+            if (tile == null) continue;
             tile.gCost = int.MaxValue;
             tile.CalculateFCost();
             tile.parent = null;
         }
-
         startTile.gCost = 0;
-        startTile.hCost = CalculateDistance(startTile, endTile);
+        startTile.hCost = CalculateDistanceCost(startTile, endTile);
         startTile.CalculateFCost();
-
         while (openList.Count > 0)
         {
-            Tile currentTile = openList.OrderBy(t => t.fCost).First();
-
-            if (currentTile == endTile)
-            {
-                return RetracePath(startTile, endTile);
-            }
-
+            Tile currentTile = GetLowestFCostTile(openList);
+            if (currentTile == endTile) { return ReconstructPath(endTile); }
             openList.Remove(currentTile);
-            closedList.Add(currentTile);
-
+            closedSet.Add(currentTile);
             foreach (Tile neighbour in GetNeighbours(currentTile))
             {
-                if (closedList.Contains(neighbour)) continue;
-
-                int tentativeGCost = currentTile.gCost + CalculateDistance(currentTile, neighbour);
+                if (closedSet.Contains(neighbour)) continue;
+                int tentativeGCost = currentTile.gCost + 10;
                 if (tentativeGCost < neighbour.gCost)
                 {
                     neighbour.parent = currentTile;
                     neighbour.gCost = tentativeGCost;
-                    neighbour.hCost = CalculateDistance(neighbour, endTile);
+                    neighbour.hCost = CalculateDistanceCost(neighbour, endTile);
                     neighbour.CalculateFCost();
-
-                    if (!openList.Contains(neighbour))
-                    {
-                        openList.Add(neighbour);
-                    }
+                    if (!openList.Contains(neighbour)) { openList.Add(neighbour); }
                 }
             }
         }
-        return null; // Path not found
+        return null;
     }
 
-    private List<Tile> RetracePath(Tile startTile, Tile endTile)
+    private List<Tile> ReconstructPath(Tile endTile)
     {
         List<Tile> path = new List<Tile>();
         Tile currentTile = endTile;
-        while (currentTile != startTile)
+        while (currentTile != null)
         {
             path.Add(currentTile);
             currentTile = currentTile.parent;
@@ -135,29 +146,39 @@ public class GridManager : MonoBehaviour
         return path;
     }
 
-    private List<Tile> GetNeighbours(Tile tile)
+    private List<Tile> GetNeighbours(Tile currentTile)
     {
         List<Tile> neighbours = new List<Tile>();
-        int[] xOffsets = { 0, 0, 1, -1 };
-        int[] zOffsets = { 1, -1, 0, 0 };
-
-        for (int i = 0; i < 4; i++)
+        Vector2Int[] directions = { new Vector2Int(0, 1), new Vector2Int(0, -1), new Vector2Int(1, 0), new Vector2Int(-1, 0) };
+        foreach (var dir in directions)
         {
-            Tile neighbour = GetTileAt(tile.x + xOffsets[i], tile.z + zOffsets[i]);
-            if (neighbour != null)
-            {
-                neighbours.Add(neighbour);
-            }
+            Tile neighbour = GetTile(currentTile.x + dir.x, currentTile.z + dir.y);
+            if (neighbour != null) { neighbours.Add(neighbour); }
         }
         return neighbours;
     }
 
-    private int CalculateDistance(Tile a, Tile b)
+    private int CalculateDistanceCost(Tile a, Tile b)
     {
         int distX = Mathf.Abs(a.x - b.x);
         int distZ = Mathf.Abs(a.z - b.z);
-        return 10 * (distX + distZ); // Manhattan distance
+        return 10 * (distX + distZ);
     }
 
-    #endregion
+    private Tile GetLowestFCostTile(List<Tile> tileList)
+    {
+        Tile lowestFCostTile = tileList[0];
+        for (int i = 1; i < tileList.Count; i++)
+        {
+            if (tileList[i].fCost < lowestFCostTile.fCost)
+            {
+                lowestFCostTile = tileList[i];
+            }
+        }
+        return lowestFCostTile;
+    }
+
+    public bool IsTileOccupiedByTrap(Tile tile) { return tilesWithTraps.Contains(tile); }
+    public void AddTrapToTile(Tile tile) { if (tile != null) { tilesWithTraps.Add(tile); } }
+    public void RemoveTrapFromTile(Tile tile) { if (tile != null) { tilesWithTraps.Remove(tile); } }
 }

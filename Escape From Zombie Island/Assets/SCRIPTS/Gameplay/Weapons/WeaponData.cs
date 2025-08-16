@@ -14,7 +14,7 @@ public class WeaponData : ScriptableObject
 
     [Header("Visuals & Audio")]
     public Sprite icon;
-    public GameObject attackPose;
+    public PlayerAnimationController.Pose attackPose;
     public Texture2D cursor; // Corrected from Sprite to Texture2D
     public AudioClip drawSound;
     public AudioClip sheatheSound;
