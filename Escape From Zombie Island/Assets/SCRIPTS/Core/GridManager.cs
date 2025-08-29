@@ -1,184 +1,97 @@
-using UnityEngine;
+// Escape From Zombie Island
+// GridManager.cs
+// by Dakikaki
+// 2024
+
 using System.Collections.Generic;
-using UnityEngine.InputSystem;
+using UnityEngine;
+
+// NEW: Added an enum to define the types of highlights a tile can have.
+public enum TileHighlight
+{
+    None,
+    Movement,
+    Attack
+}
 
 public class GridManager : MonoBehaviour
 {
-    [Header("Grid Settings")]
-    public float tileSpacing = 1.0f;
+    // NEW: Implementation of the Singleton pattern.
+    public static GridManager Instance { get; private set; }
 
-    private Tile[,] grid;
-    private Camera mainCamera;
-    private HashSet<Tile> tilesWithTraps = new HashSet<Tile>();
+    public GameObject TilePrefab;
+    public int Width;
+    public int Height;
 
-    public int GridWidth { get; private set; }
-    public int GridHeight { get; private set; }
-    public Vector2Int GridOffset { get; private set; }
+    public Material DefaultMaterial;
+    public Material MovementMaterial;
+    public Material AttackMaterial;
 
-    void Awake()
+    private readonly Dictionary<Vector2, Tile> _tiles = new();
+
+    private void Awake()
     {
-        mainCamera = Camera.main;
-        DiscoverAndRegisterGrid();
+        // NEW: Singleton initialization.
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+        }
+        else
+        {
+            Instance = this;
+        }
+
+        GenerateGrid();
     }
 
-    private void DiscoverAndRegisterGrid()
+    private void GenerateGrid()
     {
-        if (transform.childCount == 0) return;
-        Vector2Int minBounds = new Vector2Int(int.MaxValue, int.MaxValue);
-        Vector2Int maxBounds = new Vector2Int(int.MinValue, int.MinValue);
-        foreach (Transform child in transform)
+        for (int x = 0; x < Width; x++)
         {
-            int x = Mathf.RoundToInt(child.position.x / tileSpacing);
-            int z = Mathf.RoundToInt(child.position.z / tileSpacing);
-            minBounds.x = Mathf.Min(minBounds.x, x);
-            minBounds.y = Mathf.Min(minBounds.y, z);
-            maxBounds.x = Mathf.Max(maxBounds.x, x);
-            maxBounds.y = Mathf.Max(maxBounds.y, z);
-        }
-        GridOffset = minBounds;
-        GridWidth = maxBounds.x - minBounds.x + 1;
-        GridHeight = maxBounds.y - minBounds.y + 1;
-        grid = new Tile[GridWidth, GridHeight];
-        foreach (Transform child in transform)
-        {
-            Tile tile = child.GetComponent<Tile>();
-            if (tile != null)
+            for (int y = 0; y < Height; y++)
             {
-                int worldX = Mathf.RoundToInt(child.position.x / tileSpacing);
-                int worldZ = Mathf.RoundToInt(child.position.z / tileSpacing);
-                int arrayX = worldX - GridOffset.x;
-                int arrayZ = worldZ - GridOffset.y;
-                tile.x = worldX;
-                tile.z = worldZ;
-                grid[arrayX, arrayZ] = tile;
+                var tileObject = Instantiate(TilePrefab, new Vector3(x, 0, y), Quaternion.identity);
+                tileObject.transform.SetParent(transform);
+                var tile = tileObject.GetComponent<Tile>();
+                tile.gridPosition = new Vector2Int(x, y);
+                _tiles[new Vector2(x, y)] = tile;
             }
         }
     }
 
-    public Tile GetTileFromMousePosition()
+    public Tile GetTile(Vector2 position)
     {
-        Ray ray = mainCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
-        if (Physics.Raycast(ray, out RaycastHit hit))
-        {
-            return hit.collider.GetComponent<Tile>();
-        }
-        return null;
+        _tiles.TryGetValue(position, out var tile);
+        return tile;
     }
 
-    public Tile GetTileAtWorldPosition(Vector3 worldPosition)
+    // MODIFIED: This method now uses the TileHighlight enum to determine which material to apply.
+    public void HighlightTiles(IEnumerable<Tile> tiles, TileHighlight highlightType)
     {
-        Collider[] colliders = Physics.OverlapSphere(worldPosition, 0.2f);
-        foreach (var collider in colliders)
+        ClearHighlights();
+        foreach (var tile in tiles)
         {
-            Tile tile = collider.GetComponent<Tile>();
-            if (tile != null)
+            var renderer = tile.GetComponent<Renderer>();
+            switch (highlightType)
             {
-                return tile;
+                case TileHighlight.Movement:
+                    renderer.material = MovementMaterial;
+                    break;
+                case TileHighlight.Attack:
+                    renderer.material = AttackMaterial;
+                    break;
+                default:
+                    renderer.material = DefaultMaterial;
+                    break;
             }
         }
-        return null;
     }
 
-    public Tile GetTile(int x, int z)
+    public void ClearHighlights()
     {
-        int arrayX = x - GridOffset.x;
-        int arrayZ = z - GridOffset.y;
-        if (arrayX >= 0 && arrayX < GridWidth && arrayZ >= 0 && arrayZ < GridHeight)
+        foreach (var tile in _tiles.Values)
         {
-            return grid[arrayX, arrayZ];
+            tile.GetComponent<Renderer>().material = DefaultMaterial;
         }
-        return null;
     }
-
-    public Tile GetTileAt(int x, int z)
-    {
-        return GetTile(x, z);
-    }
-
-    public List<Tile> FindPath(Tile startTile, Tile endTile)
-    {
-        if (startTile == null || endTile == null) return null;
-        List<Tile> openList = new List<Tile> { startTile };
-        HashSet<Tile> closedSet = new HashSet<Tile>();
-        foreach (Tile tile in grid)
-        {
-            if (tile == null) continue;
-            tile.gCost = int.MaxValue;
-            tile.CalculateFCost();
-            tile.parent = null;
-        }
-        startTile.gCost = 0;
-        startTile.hCost = CalculateDistanceCost(startTile, endTile);
-        startTile.CalculateFCost();
-        while (openList.Count > 0)
-        {
-            Tile currentTile = GetLowestFCostTile(openList);
-            if (currentTile == endTile) { return ReconstructPath(endTile); }
-            openList.Remove(currentTile);
-            closedSet.Add(currentTile);
-            foreach (Tile neighbour in GetNeighbours(currentTile))
-            {
-                if (closedSet.Contains(neighbour)) continue;
-                int tentativeGCost = currentTile.gCost + 10;
-                if (tentativeGCost < neighbour.gCost)
-                {
-                    neighbour.parent = currentTile;
-                    neighbour.gCost = tentativeGCost;
-                    neighbour.hCost = CalculateDistanceCost(neighbour, endTile);
-                    neighbour.CalculateFCost();
-                    if (!openList.Contains(neighbour)) { openList.Add(neighbour); }
-                }
-            }
-        }
-        return null;
-    }
-
-    private List<Tile> ReconstructPath(Tile endTile)
-    {
-        List<Tile> path = new List<Tile>();
-        Tile currentTile = endTile;
-        while (currentTile != null)
-        {
-            path.Add(currentTile);
-            currentTile = currentTile.parent;
-        }
-        path.Reverse();
-        return path;
-    }
-
-    private List<Tile> GetNeighbours(Tile currentTile)
-    {
-        List<Tile> neighbours = new List<Tile>();
-        Vector2Int[] directions = { new Vector2Int(0, 1), new Vector2Int(0, -1), new Vector2Int(1, 0), new Vector2Int(-1, 0) };
-        foreach (var dir in directions)
-        {
-            Tile neighbour = GetTile(currentTile.x + dir.x, currentTile.z + dir.y);
-            if (neighbour != null) { neighbours.Add(neighbour); }
-        }
-        return neighbours;
-    }
-
-    private int CalculateDistanceCost(Tile a, Tile b)
-    {
-        int distX = Mathf.Abs(a.x - b.x);
-        int distZ = Mathf.Abs(a.z - b.z);
-        return 10 * (distX + distZ);
-    }
-
-    private Tile GetLowestFCostTile(List<Tile> tileList)
-    {
-        Tile lowestFCostTile = tileList[0];
-        for (int i = 1; i < tileList.Count; i++)
-        {
-            if (tileList[i].fCost < lowestFCostTile.fCost)
-            {
-                lowestFCostTile = tileList[i];
-            }
-        }
-        return lowestFCostTile;
-    }
-
-    public bool IsTileOccupiedByTrap(Tile tile) { return tilesWithTraps.Contains(tile); }
-    public void AddTrapToTile(Tile tile) { if (tile != null) { tilesWithTraps.Add(tile); } }
-    public void RemoveTrapFromTile(Tile tile) { if (tile != null) { tilesWithTraps.Remove(tile); } }
 }
